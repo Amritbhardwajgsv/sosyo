@@ -9,14 +9,11 @@ const {
     rejectFriendRequest,
     cancelFriendRequest,
     getFriends,
-    removeFriend,
-    blockUser,
+    removeFriendByUsername,
+    blockUserByUsername,
     getBlockedUsers,
-    unblockUser,
+    unblockUserByUsername,
 } = require("../services/friend.services");
-
-const UUID_PATTERN =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const createFriendRequestController = async (req, res) => {
     const receiverUsername = req.body.receiverUsername?.trim();
@@ -144,6 +141,13 @@ const acceptFriendRequestController = async (req, res) => {
             });
         }
 
+        if (result.blocked) {
+            return res.status(403).json({
+                success: false,
+                message: "Friend request cannot be accepted because a user is blocked",
+            });
+        }
+
         return res.status(200).json({
             success: true,
             message: "Friend request accepted",
@@ -247,24 +251,17 @@ const getFriendsController = async (req, res) => {
 
 const removeFriendController = async (req, res) => {
     try {
-        const { friendId } = req.params;
+        const friendUsername = req.params.username?.trim();
         const userId = req.user.id;
 
-        if (!UUID_PATTERN.test(friendId)) {
+        if (!friendUsername) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid friend ID",
+                message: "Friend username is required",
             });
         }
 
-        if (userId === friendId) {
-            return res.status(400).json({
-                success: false,
-                message: "You cannot remove yourself",
-            });
-        }
-
-        const friendship = await removeFriend(userId, friendId);
+        const friendship = await removeFriendByUsername(userId, friendUsername);
 
         if (!friendship) {
             return res.status(404).json({
@@ -288,29 +285,29 @@ const removeFriendController = async (req, res) => {
 
 const blockUserController = async (req, res) => {
     try {
-        const { userId: blockedId } = req.params;
+        const blockedUsername = req.params.username?.trim();
         const blockerId = req.user.id;
 
-        if (!UUID_PATTERN.test(blockedId)) {
+        if (!blockedUsername) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid user ID",
+                message: "Username is required",
             });
         }
 
-        if (blockerId === blockedId) {
-            return res.status(400).json({
-                success: false,
-                message: "You cannot block yourself",
-            });
-        }
-
-        const result = await blockUser(blockerId, blockedId);
+        const result = await blockUserByUsername(blockerId, blockedUsername);
 
         if (!result) {
             return res.status(404).json({
                 success: false,
                 message: "User not found",
+            });
+        }
+
+        if (result.selfBlock) {
+            return res.status(400).json({
+                success: false,
+                message: "You cannot block yourself",
             });
         }
 
@@ -347,17 +344,17 @@ const getBlockedUsersController = async (req, res) => {
 
 const unblockUserController = async (req, res) => {
     try {
-        const { userId: blockedId } = req.params;
+        const blockedUsername = req.params.username?.trim();
         const blockerId = req.user.id;
 
-        if (!UUID_PATTERN.test(blockedId)) {
+        if (!blockedUsername) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid user ID",
+                message: "Username is required",
             });
         }
 
-        const block = await unblockUser(blockerId, blockedId);
+        const block = await unblockUserByUsername(blockerId, blockedUsername);
 
         if (!block) {
             return res.status(404).json({

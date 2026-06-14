@@ -122,6 +122,20 @@ const acceptFriendRequest = async (requestId, receiverId) => {
             return null;
         }
 
+        const blockResult = await client.query(
+            `SELECT id
+             FROM xsah_user_blocks_tab
+             WHERE (blocker_id = $1 AND blocked_id = $2)
+                OR (blocker_id = $2 AND blocked_id = $1)
+             LIMIT 1`,
+            [friendRequest.sender_id, friendRequest.receiver_id]
+        );
+
+        if (blockResult.rows[0]) {
+            await client.query("ROLLBACK");
+            return { blocked: true };
+        }
+
         const friendshipResult = await client.query(
             `INSERT INTO xsah_friendship_tab (
                 user_one_id,
@@ -203,8 +217,16 @@ const getFriends = async (userId) => {
                WHEN f.user_one_id = $1 THEN f.user_two_id
                ELSE f.user_one_id
            END
-         WHERE f.user_one_id = $1
-            OR f.user_two_id = $1
+         WHERE (
+             f.user_one_id = $1
+             OR f.user_two_id = $1
+         )
+           AND NOT EXISTS (
+               SELECT 1
+               FROM xsah_user_blocks_tab AS b
+               WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+                  OR (b.blocker_id = u.id AND b.blocked_id = $1)
+           )
          ORDER BY u.username`,
         [userId]
     );
@@ -212,19 +234,22 @@ const getFriends = async (userId) => {
     return result.rows;
 };
 
-const removeFriend = async (userId, friendId) => {
+const removeFriendByUsername = async (userId, friendUsername) => {
     const result = await pool.query(
-        `DELETE FROM xsah_friendship_tab
-         WHERE user_one_id = LEAST($1::uuid, $2::uuid)
-           AND user_two_id = GREATEST($1::uuid, $2::uuid)
-         RETURNING id, user_one_id, user_two_id, created_at`,
-        [userId, friendId]
+        `DELETE FROM xsah_friendship_tab AS f
+         USING xsah_user AS u
+         WHERE LOWER(u.username) = LOWER($2)
+           AND u.id <> $1
+           AND f.user_one_id = LEAST($1::uuid, u.id)
+           AND f.user_two_id = GREATEST($1::uuid, u.id)
+         RETURNING f.id, f.user_one_id, f.user_two_id, f.created_at, u.username`,
+        [userId, friendUsername]
     );
 
     return result.rows[0];
 };
 
-const blockUser = async (blockerId, blockedId) => {
+const blockUserByUsername = async (blockerId, blockedUsername) => {
     const client = await pool.connect();
 
     try {
@@ -233,13 +258,22 @@ const blockUser = async (blockerId, blockedId) => {
         const userResult = await client.query(
             `SELECT id, username
              FROM xsah_user
-             WHERE id = $1`,
-            [blockedId]
+             WHERE LOWER(username) = LOWER($1)`,
+            [blockedUsername]
         );
 
-        if (!userResult.rows[0]) {
+        const blockedUser = userResult.rows[0];
+
+        if (!blockedUser) {
             await client.query("ROLLBACK");
             return null;
+        }
+
+        const blockedId = blockedUser.id;
+
+        if (blockerId === blockedId) {
+            await client.query("ROLLBACK");
+            return { selfBlock: true };
         }
 
         const blockResult = await client.query(
@@ -275,7 +309,7 @@ const blockUser = async (blockerId, blockedId) => {
 
         return {
             block: blockResult.rows[0],
-            blockedUser: userResult.rows[0],
+            blockedUser,
         };
     } catch (error) {
         await client.query("ROLLBACK");
@@ -303,13 +337,15 @@ const getBlockedUsers = async (blockerId) => {
     return result.rows;
 };
 
-const unblockUser = async (blockerId, blockedId) => {
+const unblockUserByUsername = async (blockerId, blockedUsername) => {
     const result = await pool.query(
-        `DELETE FROM xsah_user_blocks_tab
-         WHERE blocker_id = $1
-           AND blocked_id = $2
-         RETURNING id, blocker_id, blocked_id, created_at`,
-        [blockerId, blockedId]
+        `DELETE FROM xsah_user_blocks_tab AS b
+         USING xsah_user AS u
+         WHERE b.blocker_id = $1
+           AND b.blocked_id = u.id
+           AND LOWER(u.username) = LOWER($2)
+         RETURNING b.id, b.blocker_id, b.blocked_id, b.created_at, u.username`,
+        [blockerId, blockedUsername]
     );
 
     return result.rows[0];
@@ -326,8 +362,8 @@ module.exports = {
     rejectFriendRequest,
     cancelFriendRequest,
     getFriends,
-    removeFriend,
-    blockUser,
+    removeFriendByUsername,
+    blockUserByUsername,
     getBlockedUsers,
-    unblockUser,
+    unblockUserByUsername,
 };

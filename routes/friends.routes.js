@@ -8,6 +8,6 @@ const authMiddleware = require("../middleware/auth.middleware");
 const router = express.Router();
 
 router.get("/", authMiddleware, getFriendsController);
-router.delete("/:friendId", authMiddleware, removeFriendController);
+router.delete("/:username", authMiddleware, removeFriendController);
 
 module.exports = router;

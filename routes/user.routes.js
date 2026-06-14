@@ -11,7 +11,7 @@ const router = express.Router();
 
 router.get("/search", authMiddleware, searchUsers);
 router.get("/blocked", authMiddleware, getBlockedUsersController);
-router.post("/:userId/block", authMiddleware, blockUserController);
-router.delete("/:userId/block", authMiddleware, unblockUserController);
+router.post("/:username/block", authMiddleware, blockUserController);
+router.delete("/:username/block", authMiddleware, unblockUserController);
 
 module.exports = router;

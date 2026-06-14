@@ -297,7 +297,7 @@ blocked_at
 ### Block User
 
 ```http
-POST /api/users/:userId/block
+POST /api/users/:username/block
 Authorization: Bearer TOKEN
 ```
 
@@ -308,12 +308,13 @@ Purpose:
 - Cancels pending requests in both directions.
 - Prevents future friend requests while either user has blocked the other.
 
-No request body is required.
+No request body is required. The server resolves the username to its stable
+UUID before storing the block.
 
 ### Unblock User
 
 ```http
-DELETE /api/users/:userId/block
+DELETE /api/users/:username/block
 Authorization: Bearer TOKEN
 ```
 
@@ -463,7 +464,7 @@ Response:
 ### Remove Friend
 
 ```http
-DELETE /api/friends/:friendId
+DELETE /api/friends/:username
 Authorization: Bearer TOKEN
 ```
 
