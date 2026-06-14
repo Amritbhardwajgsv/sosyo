@@ -3,10 +3,12 @@ require("dotenv").config();
 const express = require("express");
 const authRoutes = require("./routes/auth.routes");
 const userRoutes = require("./routes/user.routes");
+const friendRoutes = require("./routes/friend.routes");
+const friendsRoutes = require("./routes/friends.routes");
 const pool = require("./config/db");
 const redis=require("./config/redis");
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
@@ -16,6 +18,8 @@ app.get("/", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/friend-requests", friendRoutes);
+app.use("/api/friends", friendsRoutes);
 
 const startServer = async () => {
     try {
