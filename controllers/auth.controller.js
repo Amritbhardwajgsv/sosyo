@@ -5,15 +5,27 @@ const {
     getUserByEmail,
     getUserByPhone,
     createUser,
+    getUserById,
 } = require("../services/auth.services");
 const otpGenerator = require("otp-generator");
 const redis = require("../config/redis");
 const twilio = require("twilio");
 
-const twilioClient = twilio(
-    process.env.TWILIO_ACCOUNT_SID,
-    process.env.TWILIO_AUTH_TOKEN
-);
+const getTwilioClient = () => {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
+    const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
+    const phoneNumber = process.env.TWILIO_PHONE_NUMBER?.trim();
+
+    if (!accountSid || !authToken || !phoneNumber) {
+        throw new Error("Twilio credentials are not configured");
+    }
+
+    if (!accountSid.startsWith("AC")) {
+        throw new Error("TWILIO_ACCOUNT_SID must start with AC");
+    }
+
+    return twilio(accountSid, authToken);
+};
 
 const loginUser = async (req, res) => {
     try {
@@ -159,13 +171,25 @@ const loginuser_Phonenumber = async (req, res) => {
             });
         }
 
-        if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
+        const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
+        const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
+        const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER?.trim();
+
+        if (!accountSid || !authToken || !twilioPhoneNumber) {
             return res.status(500).json({
                 success: false,
                 message: "Twilio credentials are not configured",
             });
         }
 
+        if (!accountSid.startsWith("AC")) {
+            return res.status(500).json({
+                success: false,
+                message: "Invalid Twilio configuration: TWILIO_ACCOUNT_SID must start with AC",
+            });
+        }
+
+        const twilioClient = getTwilioClient();
         const otp = otpGenerator.generate(6, {
             upperCaseAlphabets: false,
             lowerCaseAlphabets: false,
@@ -177,7 +201,7 @@ const loginuser_Phonenumber = async (req, res) => {
         await twilioClient.messages.create({
             body: `Your Sosyo verification OTP is ${otp}. It is valid for 5 minutes.`,
             to: Phone_number,
-            from: process.env.TWILIO_PHONE_NUMBER,
+            from: twilioPhoneNumber,
         });
 
         return res.status(200).json({
@@ -259,9 +283,35 @@ const verifyotp = async (req, res) => {
         });
     }
 };
+
+const getCurrentUser = async (req, res) => {
+    try {
+        const user = await getUserById(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            user,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message,
+        });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
     loginuser_Phonenumber,
-    verifyotp
+    verifyotp,
+    getCurrentUser,
 };

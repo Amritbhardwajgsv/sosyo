@@ -1,4 +1,34 @@
 const users = require("../models/user.model");
+const { searchUsers: searchUsersService } = require("../services/user.services");
+
+const searchUsers = async (req, res) => {
+    try {
+        const searchTerm = req.query.q?.trim();
+
+        if (!searchTerm) {
+            return res.status(400).json({
+                success: false,
+                message: "Search term is required",
+            });
+        }
+
+        const matchingUsers = await searchUsersService(
+            searchTerm,
+            req.user.id
+        );
+
+        return res.status(200).json({
+            success: true,
+            users: matchingUsers,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message,
+        });
+    }
+};
 
 const getUsers = (req, res) => {
     res.status(200).json({
@@ -48,6 +78,7 @@ const createUser = (req, res) => {
 };
 
 module.exports = {
+    searchUsers,
     getUsers,
     getUserById,
     createUser,

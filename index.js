@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const express = require("express");
 const authRoutes = require("./routes/auth.routes");
+const userRoutes = require("./routes/user.routes");
 const pool = require("./config/db");
 const redis=require("./config/redis");
 const app = express();
@@ -14,6 +15,7 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 
 const startServer = async () => {
     try {
