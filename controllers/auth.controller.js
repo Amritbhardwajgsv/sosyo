@@ -10,6 +10,26 @@ const {
 const otpGenerator = require("otp-generator");
 const redis = require("../config/redis");
 const twilio = require("twilio");
+const { randomUUID } = require("crypto");
+
+const createAccessToken = async (user) => {
+    const tokenVersion = Number(
+        (await redis.get(`auth:token-version:${user.id}`)) || 0
+    );
+
+    return jwt.sign(
+        {
+            id: user.id,
+            email: user.email,
+            tokenVersion,
+        },
+        process.env.JWT_SECRET,
+        {
+            expiresIn: "1d",
+            jwtid: randomUUID(),
+        }
+    );
+};
 
 const getTwilioClient = () => {
     const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim();
@@ -56,16 +76,7 @@ const loginUser = async (req, res) => {
             });
         }
 
-        const token = jwt.sign(
-            {
-                id: user.id,
-                email: user.email,
-            },
-            process.env.JWT_SECRET,
-            {
-                expiresIn: "1d",
-            }
-        );
+        const token = await createAccessToken(user);
 
         return res.status(200).json({
             success: true,
@@ -122,16 +133,7 @@ const registerUser = async (req, res) => {
             passwordHash,
         });
 
-        const token = jwt.sign(
-            {
-                id: user.id,
-                email: user.email,
-            },
-            process.env.JWT_SECRET,
-            {
-                expiresIn: "1d",
-            }
-        );
+        const token = await createAccessToken(user);
 
         return res.status(201).json({
             success: true,
@@ -255,14 +257,7 @@ const verifyotp = async (req, res) => {
             });
         }
 
-        const token = jwt.sign(
-            {
-                id: user.id,
-                email: user.email,
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: "1d" }
-        );
+        const token = await createAccessToken(user);
 
         return res.status(200).json({
             success: true,
@@ -308,10 +303,55 @@ const getCurrentUser = async (req, res) => {
     }
 };
 
+const logoutUser = async (req, res) => {
+    try {
+        const remainingSeconds = req.user.exp - Math.floor(Date.now() / 1000);
+
+        if (remainingSeconds > 0) {
+            await redis.set(
+                `auth:revoked:${req.user.jti}`,
+                "1",
+                "EX",
+                remainingSeconds
+            );
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Logout successful",
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message,
+        });
+    }
+};
+
+const logoutAllDevices = async (req, res) => {
+    try {
+        await redis.incr(`auth:token-version:${req.user.id}`);
+
+        return res.status(200).json({
+            success: true,
+            message: "Logged out from all devices",
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message,
+        });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
     loginuser_Phonenumber,
     verifyotp,
     getCurrentUser,
+    logoutUser,
+    logoutAllDevices,
 };

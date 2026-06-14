@@ -247,6 +247,37 @@ Authorization: Bearer TOKEN
 
 Purpose: returns the authenticated user's safe profile data.
 
+### Logout Current Device
+
+```http
+POST /api/auth/logout
+Authorization: Bearer TOKEN
+```
+
+Purpose:
+
+- Revokes only the supplied JWT.
+- Stores its unique `jti` in Redis until the token's original expiry time.
+- Other devices remain logged in.
+- The client should delete its local token after success.
+
+### Logout All Devices
+
+```http
+POST /api/auth/logout-all
+Authorization: Bearer TOKEN
+```
+
+Purpose:
+
+- Increments the authenticated user's token version in Redis.
+- Immediately invalidates all existing JWTs for that user.
+- Requires a new login on every device.
+
+Every newly issued JWT contains a unique `jti` and the user's current Redis
+token version. The authentication middleware rejects revoked token IDs and old
+token versions.
+
 ## User APIs
 
 ### Search Users
